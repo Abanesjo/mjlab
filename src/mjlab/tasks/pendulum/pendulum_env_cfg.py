@@ -243,6 +243,15 @@ def make_pendulum_env_cfg() -> ManagerBasedRlEnvCfg:
         "bias_range": (-math.radians(1.0), math.radians(1.0)),
       },
     ),
+    "pendulum_damping": EventTermCfg(
+      mode="startup",
+      func=dr.joint_damping,
+      params={
+        "asset_cfg": SceneEntityCfg("robot", joint_names=_PENDULUM_JOINT_NAMES),
+        "operation": "abs",
+        "ranges": (0.0, 1.0),
+      },
+    ),
   }
 
   ##
