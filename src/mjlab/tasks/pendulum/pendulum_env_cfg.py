@@ -368,7 +368,7 @@ def make_pendulum_env_cfg() -> ManagerBasedRlEnvCfg:
             "angle_rad": math.radians(60.0),
           },
         },
-        "duration_s": 0.1,
+        "duration_s": 0.5,
         "grace_period_s": 0.1,
       },
     ),

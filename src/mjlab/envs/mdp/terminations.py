@@ -96,6 +96,13 @@ class sustained:
     # re-read from cfg.params on every call so curricula can mutate them.
     inner = cfg.params["inner"]
     self._inner_func = inner["func"]
+    # Resolve SceneEntityCfgs nested inside the inner params. The manager's
+    # top-level resolver only walks cfg.params.values(), so without this pass
+    # an inner asset_cfg would keep its default slice(None), silently selecting
+    # all joints/bodies/geoms instead of the named subset.
+    for value in inner.get("params", {}).values():
+      if isinstance(value, SceneEntityCfg):
+        value.resolve(env.scene)
     self._hold_count = torch.zeros(env.num_envs, device=env.device, dtype=torch.long)
 
   def __call__(
