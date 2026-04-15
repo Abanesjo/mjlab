@@ -36,7 +36,7 @@ class PendulumStage:
 # Stage boundaries mirror Isaac Lab's progress thresholds at 0/20/40/60/80%
 # of the total curriculum_total_steps. We use the same 2.4M-step default:
 # curriculum_total_steps = 75_000 * 32 = 2_400_000.
-CURRICULUM_TOTAL_STEPS_DEFAULT = 2_400_000
+CURRICULUM_TOTAL_STEPS_DEFAULT = 5 * 1000 * 32
 
 
 def default_stages(
@@ -47,7 +47,7 @@ def default_stages(
     # Stage 1: stand + balance in place, generous pendulum tolerance.
     PendulumStage(
       start_step=0,
-      dist_range=(0.0, 0.0),
+      dist_range=(0.0, 0.1),
       bearing_range=(0.0, 2.0 * math.pi),
       yaw_range=(0.0, 0.0),
       pendulum_angle_rad=math.radians(60.0),
@@ -59,7 +59,7 @@ def default_stages(
     # Stage 2: small goals, no pushes.
     PendulumStage(
       start_step=int(0.20 * total_steps),
-      dist_range=(0.0, 0.2),
+      dist_range=(0.1, 0.2),
       bearing_range=(0.0, 2.0 * math.pi),
       yaw_range=(-0.5, 0.5),
       pendulum_angle_rad=math.radians(60.0),
