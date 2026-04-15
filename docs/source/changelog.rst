@@ -2,6 +2,37 @@
 Changelog
 =========
 
+Upcoming version (not yet released)
+-----------------------------------
+
+Added
+^^^^^
+
+- Added ``Mjlab-Pendulum-Balance-Unitree-Go2`` task: a Unitree Go2 quadruped
+  balances a passive inverted pendulum on its back while tracking random
+  position + yaw goals on flat terrain. Ported from the Isaac Lab
+  ``Template-Go2-Pendulum-Direct-v0`` environment with a 5-stage difficulty
+  curriculum that tightens pendulum termination angle, goal sampling
+  ranges, and external push strength. Policy and value networks are
+  ``(512, 256, 128)`` ELU MLPs.
+- Added :class:`~mjlab.asset_zoo.robots.unitree_go2.get_go2_pendulum_robot_cfg`
+  and the accompanying MJCF under
+  ``src/mjlab/asset_zoo/robots/unitree_go2/`` (two named hinge joints on the
+  pendulum with ±π/2 range, matching the Isaac Lab convention).
+- Added general-purpose MDP primitives reusable across tasks:
+  :func:`~mjlab.envs.mdp.rewards.action_l2`,
+  :func:`~mjlab.envs.mdp.rewards.base_height_l2`,
+  :func:`~mjlab.envs.mdp.rewards.lin_vel_z_l2`,
+  :func:`~mjlab.envs.mdp.rewards.ang_vel_xy_l2`;
+  :class:`~mjlab.envs.mdp.terminations.sustained` (wraps another termination
+  with a hold-duration + grace-period);
+  :func:`~mjlab.envs.mdp.terminations.body_contact_force`;
+  :class:`~mjlab.utils.noise.NoiseModelWithBiasDriftCfg` (additive bias with
+  per-step Brownian drift).
+- Added ``lpf_cutoff_hz`` to
+  :class:`~mjlab.envs.mdp.actions.BaseActionCfg`: a first-order low-pass
+  filter on processed actions, off by default.
+
 Version 1.3.0 (April 14, 2026)
 ------------------------------
 

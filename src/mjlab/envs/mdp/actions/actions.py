@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
@@ -34,6 +35,14 @@ class BaseActionCfg(ActionTermCfg):
 
   preserve_order: bool = False
   """Whether to preserve the order of actuator names."""
+
+  lpf_cutoff_hz: float | None = None
+  """If set, apply a first-order low-pass filter to processed actions.
+
+  Uses ``alpha = dt / (dt + 1 / (2 * pi * fc))`` where ``dt = env.step_dt``.
+  Operates on ``_processed_actions`` after scale/offset/clip. The filter state
+  is reset to zero on env reset.
+  """
 
 
 class BaseAction(ActionTerm):
@@ -96,6 +105,14 @@ class BaseAction(ActionTerm):
         cfg.clip, self._target_names
       )
       self._clip[:, index_list] = torch.tensor(value_list, device=self.device)
+
+    self._lpf_alpha: float | None = None
+    self._lpf_state: torch.Tensor | None = None
+    if cfg.lpf_cutoff_hz is not None:
+      dt = env.step_dt
+      tau = 1.0 / (2.0 * math.pi * cfg.lpf_cutoff_hz)
+      self._lpf_alpha = dt / (dt + tau)
+      self._lpf_state = torch.zeros_like(self._raw_actions)
 
   def _find_targets(self, cfg: BaseActionCfg) -> tuple[list[int], list[str]]:
     """Find target IDs and names based on transmission type.
@@ -161,10 +178,19 @@ class BaseAction(ActionTerm):
         min=self._clip[:, :, 0],
         max=self._clip[:, :, 1],
       )
+    if self._lpf_alpha is not None:
+      assert self._lpf_state is not None
+      self._lpf_state = (
+        self._lpf_alpha * self._processed_actions
+        + (1.0 - self._lpf_alpha) * self._lpf_state
+      )
+      self._processed_actions = self._lpf_state
 
   def reset(self, env_ids: torch.Tensor | slice | None = None) -> None:
     """Reset raw actions to zero for specified environments."""
     self._raw_actions[env_ids] = 0.0
+    if self._lpf_state is not None:
+      self._lpf_state[env_ids] = 0.0
 
 
 ##

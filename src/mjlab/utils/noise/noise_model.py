@@ -82,3 +82,47 @@ class NoiseModelWithAdditiveBias(NoiseModel):
     self._initialize_bias_shape(data.shape)
     noisy_data = super().__call__(data)
     return noisy_data + self._bias
+
+
+class NoiseModelWithBiasDrift(NoiseModelWithAdditiveBias):
+  """Additive bias with Brownian drift.
+
+  On reset, samples an initial bias per env (and optionally per component)
+  from ``bias_noise_cfg``. On each ``__call__``, adds a Gaussian increment
+  ``N(0, (drift_std_per_s * sqrt(step_dt))^2)`` to the bias before applying.
+
+  ``step_dt`` must be provided to the model via :meth:`set_step_dt` after
+  construction. The observation manager currently does not do this
+  automatically, so tasks that use this model should wire ``step_dt`` at
+  manager-init time.
+  """
+
+  def __init__(
+    self,
+    noise_model_cfg: noise_cfg.NoiseModelWithBiasDriftCfg,
+    num_envs: int,
+    device: str,
+  ):
+    super().__init__(noise_model_cfg, num_envs, device)
+    self._drift_std_per_s = noise_model_cfg.drift_std_per_s
+    self._step_dt: float | None = None
+
+  def set_step_dt(self, step_dt: float) -> None:
+    """Configure the per-step timestep used to scale Brownian drift."""
+    assert step_dt > 0.0
+    self._step_dt = step_dt
+
+  @override
+  def __call__(self, data: torch.Tensor) -> torch.Tensor:
+    self._initialize_bias_shape(data.shape)
+    if self._drift_std_per_s > 0.0:
+      if self._step_dt is None:
+        raise RuntimeError(
+          "NoiseModelWithBiasDrift: call set_step_dt(dt) before the first "
+          "__call__ so the Brownian increment can be scaled by sqrt(dt)."
+        )
+      drift_std = self._drift_std_per_s * (self._step_dt**0.5)
+      self._bias = self._bias + drift_std * torch.randn_like(self._bias)
+    # Stepwise noise from base NoiseModel.__call__.
+    noisy_data = NoiseModel.__call__(self, data)
+    return noisy_data + self._bias

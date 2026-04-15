@@ -55,6 +55,14 @@ def joint_acc_l2(
   return torch.sum(torch.square(asset.data.joint_acc[:, asset_cfg.joint_ids]), dim=1)
 
 
+def action_l2(env: ManagerBasedRlEnv) -> torch.Tensor:
+  """Penalize action magnitude using L2 squared kernel.
+
+  Operates on raw policy output (before per-term scale/offset).
+  """
+  return torch.sum(torch.square(env.action_manager.action), dim=1)
+
+
 def action_rate_l2(env: ManagerBasedRlEnv) -> torch.Tensor:
   """Penalize the rate of change of the actions using L2 squared kernel.
 
@@ -157,3 +165,37 @@ def flat_orientation_l2(
   """Penalize non-flat base orientation."""
   asset: Entity = env.scene[asset_cfg.name]
   return torch.sum(torch.square(asset.data.projected_gravity_b[:, :2]), dim=1)
+
+
+def lin_vel_z_l2(
+  env: ManagerBasedRlEnv,
+  asset_cfg: SceneEntityCfg = _DEFAULT_ASSET_CFG,
+) -> torch.Tensor:
+  """Penalize root vertical linear velocity (body frame) using L2 squared kernel."""
+  asset: Entity = env.scene[asset_cfg.name]
+  return torch.square(asset.data.root_link_lin_vel_b[:, 2])
+
+
+def ang_vel_xy_l2(
+  env: ManagerBasedRlEnv,
+  asset_cfg: SceneEntityCfg = _DEFAULT_ASSET_CFG,
+) -> torch.Tensor:
+  """Penalize root horizontal angular velocity (body frame) using L2 squared kernel."""
+  asset: Entity = env.scene[asset_cfg.name]
+  return torch.sum(torch.square(asset.data.root_link_ang_vel_b[:, :2]), dim=1)
+
+
+def base_height_l2(
+  env: ManagerBasedRlEnv,
+  target_height: float,
+  std: float,
+  asset_cfg: SceneEntityCfg = _DEFAULT_ASSET_CFG,
+) -> torch.Tensor:
+  """Reward proximity of base height to a target.
+
+  Returns exp(-((target - z)^2 / std^2)). Unlike an L2 penalty, this is a
+  bounded reward (0, 1] suitable for shaping.
+  """
+  asset: Entity = env.scene[asset_cfg.name]
+  z = asset.data.root_link_pos_w[:, 2]
+  return torch.exp(-torch.square(target_height - z) / (std**2))

@@ -144,3 +144,26 @@ class NoiseModelWithAdditiveBiasCfg(
       raise ValueError(
         "bias_noise_cfg must be specified for NoiseModelWithAdditiveBiasCfg"
       )
+
+
+@dataclass(kw_only=True)
+class NoiseModelWithBiasDriftCfg(
+  NoiseModelWithAdditiveBiasCfg, class_type=noise_model.NoiseModelWithBiasDrift
+):
+  """Additive bias + Gaussian Brownian drift.
+
+  Extends :class:`NoiseModelWithAdditiveBiasCfg` with a per-step Brownian
+  drift increment. The bias is sampled from ``bias_noise_cfg`` on reset, then
+  at every call receives a Gaussian increment with std
+  ``drift_std_per_s * sqrt(dt)``.
+
+  Matches the IMU / encoder drift model used by Isaac Lab's
+  ``go2_pendulum`` environment.
+  """
+
+  drift_std_per_s: float = 0.0
+
+  def __post_init__(self):
+    super().__post_init__()
+    if self.drift_std_per_s < 0.0:
+      raise ValueError("drift_std_per_s must be non-negative")
