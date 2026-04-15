@@ -31,12 +31,13 @@ class PendulumStage:
   position_tolerance_m: float
   position_duration_s: float
   push_force_xy_range: tuple[float, float]
+  pendulum_reset_deg_range: tuple[float, float]
 
 
 # Stage boundaries mirror Isaac Lab's progress thresholds at 0/20/40/60/80%
 # of the total curriculum_total_steps. We use the same 2.4M-step default:
 # curriculum_total_steps = 75_000 * 32 = 2_400_000.
-CURRICULUM_TOTAL_STEPS_DEFAULT = 5 * 500 * 32
+CURRICULUM_TOTAL_STEPS_DEFAULT = 5 * 1000 * 32
 
 
 def default_stages(
@@ -55,6 +56,7 @@ def default_stages(
       position_tolerance_m=5.0,
       position_duration_s=15.0,
       push_force_xy_range=(0.0, 0.0),
+      pendulum_reset_deg_range=(0.0, 5.0),
     ),
     # Stage 2: small goals, no pushes.
     PendulumStage(
@@ -67,6 +69,7 @@ def default_stages(
       position_tolerance_m=0.5,
       position_duration_s=15.0,
       push_force_xy_range=(0.0, 0.0),
+      pendulum_reset_deg_range=(0.0, 8.0),
     ),
     # Stage 3: medium goals, light pushes, tighter pendulum.
     PendulumStage(
@@ -79,6 +82,7 @@ def default_stages(
       position_tolerance_m=0.3,
       position_duration_s=15.0,
       push_force_xy_range=(-5.0, 5.0),
+      pendulum_reset_deg_range=(2.0, 10.0),
     ),
     # Stage 4: full goals, full pushes, 30-deg pendulum.
     PendulumStage(
@@ -91,6 +95,7 @@ def default_stages(
       position_tolerance_m=0.2,
       position_duration_s=15.0,
       push_force_xy_range=(-10.0, 10.0),
+      pendulum_reset_deg_range=(3.0, 15.0),
     ),
     # Stage 5: tightest — 15-deg pendulum.
     PendulumStage(
@@ -103,6 +108,7 @@ def default_stages(
       position_tolerance_m=0.2,
       position_duration_s=15.0,
       push_force_xy_range=(-10.0, 10.0),
+      pendulum_reset_deg_range=(5.0, 20.0),
     ),
   ]
 
@@ -125,6 +131,7 @@ def pendulum_difficulty(
   pendulum_termination_name: str,
   position_termination_name: str,
   push_event_name: str | None = None,
+  pendulum_reset_event_name: str | None = None,
   stages: list[PendulumStage] | None = None,
 ) -> dict[str, torch.Tensor]:
   """Advance the 5-stage curriculum based on ``env.common_step_counter``.
@@ -142,6 +149,9 @@ def pendulum_difficulty(
     push_event_name: Optional name of the ``apply_body_impulse`` event whose
       ``force_range`` we re-tune per stage. If ``None``, pushes aren't
       modulated.
+    pendulum_reset_event_name: Optional name of the
+      ``reset_pendulum_angles_magnitude`` event whose ``angle_range_deg`` we
+      re-tune per stage. If ``None``, the reset range isn't modulated.
     stages: Optional override for the stage list.
   """
   del env_ids
@@ -176,6 +186,11 @@ def pendulum_difficulty(
     push_cfg = env.event_manager.get_term_cfg(push_event_name)
     push_cfg.params["force_range"] = stage.push_force_xy_range
 
+  # Pendulum reset angle range.
+  if pendulum_reset_event_name is not None:
+    reset_cfg = env.event_manager.get_term_cfg(pendulum_reset_event_name)
+    reset_cfg.params["angle_range_deg"] = stage.pendulum_reset_deg_range
+
   step_tensor = torch.tensor(float(env.common_step_counter))
   return {
     "stage_start_step": torch.tensor(float(stage.start_step)),
@@ -183,6 +198,7 @@ def pendulum_difficulty(
     "pendulum_angle_rad": torch.tensor(stage.pendulum_angle_rad),
     "position_tolerance_m": torch.tensor(stage.position_tolerance_m),
     "dist_max": torch.tensor(stage.dist_range[1]),
+    "pendulum_reset_deg_max": torch.tensor(stage.pendulum_reset_deg_range[1]),
   }
 
 

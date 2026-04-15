@@ -13,6 +13,12 @@ import torch
 from mjlab.entity import Entity
 from mjlab.managers.reward_manager import RewardTermCfg
 from mjlab.managers.scene_entity_config import SceneEntityCfg
+from mjlab.sensor.contact_sensor import ContactSensor
+from mjlab.tasks.pendulum.mdp.gait import (
+  desired_contact_states,
+  foot_phase,
+  swing_target_height,
+)
 
 if TYPE_CHECKING:
   from mjlab.envs.manager_based_rl_env import ManagerBasedRlEnv
@@ -121,3 +127,101 @@ def action_over_limit_l2(env: ManagerBasedRlEnv, soft_limit: float) -> torch.Ten
   action = env.action_manager.action
   over = torch.clamp(action.abs() - soft_limit, min=0.0)
   return torch.sum(torch.square(over), dim=1)
+
+
+def feet_clearance(
+  env: ManagerBasedRlEnv,
+  asset_cfg: SceneEntityCfg,
+  period_s: float,
+  offsets: tuple[float, ...],
+  peak_height: float = 0.08,
+  base_height: float = 0.02,
+) -> torch.Tensor:
+  """Swing-phase foot clearance penalty.
+
+  ``sum_i (target_z_i - foot_z_i)^2 * (1 - desired_contact_i)``. The target
+  traces a triangular wave peaking at ``peak_height + base_height`` at
+  mid-swing; stance-phase contributions are masked by the smoothed contact
+  flag. Apply with negative weight.
+  """
+  asset: Entity = env.scene[asset_cfg.name]
+  phase = foot_phase(env, period_s, offsets)
+  target_z = swing_target_height(
+    phase, peak_height=peak_height, base_height=base_height
+  )
+  foot_z = asset.data.body_link_pos_w[:, asset_cfg.body_ids, 2]
+  contact = desired_contact_states(phase)
+  error_sq = torch.square(target_z - foot_z) * (1.0 - contact)
+  return torch.sum(error_sq, dim=-1)
+
+
+def feet_air_time(
+  env: ManagerBasedRlEnv,
+  sensor_name: str,
+  command_name: str,
+  threshold_s: float = 0.5,
+  command_distance_threshold: float = 0.1,
+) -> torch.Tensor:
+  """Per-landing air-time bonus, gated by the position-goal command.
+
+  Adds ``(last_air_time_i - threshold_s)`` at each foot's landing frame
+  (``compute_first_contact`` mask) and sums across feet; zeroed out when the
+  body-frame position error is below ``command_distance_threshold``.
+  """
+  sensor: ContactSensor = env.scene[sensor_name]
+  first_contact = sensor.compute_first_contact(env.step_dt)
+  last_air = sensor.data.last_air_time
+  assert last_air is not None
+  per_foot = (last_air - threshold_s) * first_contact.float()
+  reward = torch.sum(per_foot, dim=-1)
+
+  cmd = env.command_manager.get_command(command_name)
+  assert cmd is not None
+  dist = torch.linalg.vector_norm(cmd[:, :2], dim=-1)
+  return reward * (dist > command_distance_threshold).float()
+
+
+def tracking_contacts_shaped_force(
+  env: ManagerBasedRlEnv,
+  sensor_name: str,
+  period_s: float,
+  offsets: tuple[float, ...],
+  sigma: float = 100.0,
+) -> torch.Tensor:
+  """Penalize foot forces during swing (desired_contact_i ~ 0).
+
+  For each foot: ``-(1 - desired_contact_i) * (1 - exp(-f_i^2 / sigma^2))``,
+  averaged over 4 feet. Apply with positive weight (value is already
+  non-positive).
+  """
+  sensor: ContactSensor = env.scene[sensor_name]
+  force = sensor.data.force
+  assert force is not None
+  force_mag = torch.linalg.vector_norm(force, dim=-1)  # [B, F]
+  phase = foot_phase(env, period_s, offsets)
+  contact = desired_contact_states(phase)
+  swing_force_cost = (1.0 - contact) * (1.0 - torch.exp(-(force_mag**2) / (sigma**2)))
+  return -torch.mean(swing_force_cost, dim=-1)
+
+
+def undesired_contacts(
+  env: ManagerBasedRlEnv,
+  sensor_name: str,
+  threshold: float = 1.0,
+) -> torch.Tensor:
+  """Count of slots whose max-history force exceeds ``threshold``.
+
+  Reads ``force_history`` ``[B, N, H, 3]``, takes L2 per substep, then max
+  over history. Apply with negative weight to penalize unwanted contacts
+  (e.g., thighs scraping the ground).
+  """
+  sensor: ContactSensor = env.scene[sensor_name]
+  force_history = sensor.data.force_history
+  assert force_history is not None, (
+    f"Sensor '{sensor_name}' must set history_length >= 1 "
+    "and include 'force' in its fields tuple."
+  )
+  force_mag = torch.linalg.vector_norm(force_history, dim=-1)  # [B, N, H]
+  max_over_history = force_mag.max(dim=-1).values  # [B, N]
+  is_contact = max_over_history > threshold
+  return torch.sum(is_contact.float(), dim=-1)

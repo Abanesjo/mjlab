@@ -452,9 +452,14 @@ class ObservationManager(ManagerBase):
             f"Class type for observation term '{term_name}' NoiseModelCfg"
             f" is not a subclass of 'NoiseModel'. Received: '{type(noise_model_cls)}'."
           )
-          self._group_obs_class_instances[term_name] = noise_model_cls(
+          instance = noise_model_cls(
             term_cfg.noise, num_envs=self._env.num_envs, device=self._env.device
           )
+          # Bias-drift models need the policy timestep to scale Brownian
+          # increments; do it here so tasks don't have to wire it manually.
+          if isinstance(instance, noise_model.NoiseModelWithBiasDrift):
+            instance.set_step_dt(self._env.step_dt)
+          self._group_obs_class_instances[term_name] = instance
 
         if term_cfg.delay_max_lag > 0:
           group_entry_delay_buffer[term_name] = DelayBuffer(

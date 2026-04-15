@@ -31,12 +31,27 @@ from mjlab.sim import MujocoCfg, SimulationCfg
 from mjlab.tasks.pendulum import mdp
 from mjlab.terrains import TerrainEntityCfg
 from mjlab.utils.noise import UniformNoiseCfg as Unoise
+from mjlab.utils.noise.noise_cfg import NoiseModelWithBiasDriftCfg
 from mjlab.viewer import ViewerConfig
 
 # Joint selectors. The Go2 variant uses these as-is; they match joint names
 # declared in the unitree_go2 MJCF.
 _LEG_JOINT_REGEX = r".*_(hip|thigh|calf)_joint"
 _PENDULUM_JOINT_NAMES = ("pendulum_joint1", "pendulum_joint2")
+
+
+def _bias_drift(
+  step_noise: float,
+  bias: float,
+  drift_per_s: float = 0.0,
+) -> NoiseModelWithBiasDriftCfg:
+  """Per-step uniform noise + reset-sampled uniform bias + optional drift."""
+  return NoiseModelWithBiasDriftCfg(
+    noise_cfg=Unoise(n_min=-step_noise, n_max=step_noise),
+    bias_noise_cfg=Unoise(n_min=-bias, n_max=bias),
+    drift_std_per_s=drift_per_s,
+    sample_bias_per_component=True,
+  )
 
 
 def make_pendulum_env_cfg() -> ManagerBasedRlEnvCfg:
@@ -55,16 +70,20 @@ def make_pendulum_env_cfg() -> ManagerBasedRlEnvCfg:
     "base_lin_vel": ObservationTermCfg(
       func=envs_mdp.builtin_sensor,
       params={"sensor_name": "robot/imu_lin_vel"},
-      noise=Unoise(n_min=-0.1, n_max=0.1),
+      noise=_bias_drift(step_noise=0.1, bias=0.05, drift_per_s=0.01),
     ),
     "base_ang_vel": ObservationTermCfg(
       func=envs_mdp.builtin_sensor,
       params={"sensor_name": "robot/imu_ang_vel"},
-      noise=Unoise(n_min=-0.2, n_max=0.2),
+      noise=_bias_drift(
+        step_noise=0.2,
+        bias=math.radians(3.0),
+        drift_per_s=math.radians(0.5),
+      ),
     ),
     "projected_gravity": ObservationTermCfg(
       func=envs_mdp.projected_gravity,
-      noise=Unoise(n_min=-0.05, n_max=0.05),
+      noise=_bias_drift(step_noise=0.05, bias=0.03),
     ),
     "state_error": ObservationTermCfg(
       func=envs_mdp.generated_commands,
@@ -75,28 +94,36 @@ def make_pendulum_env_cfg() -> ManagerBasedRlEnvCfg:
       params={
         "asset_cfg": SceneEntityCfg("robot", joint_names=(_LEG_JOINT_REGEX,)),
       },
-      noise=Unoise(n_min=-0.01, n_max=0.01),
+      noise=_bias_drift(step_noise=0.01, bias=math.radians(1.0)),
     ),
     "leg_joint_vel": ObservationTermCfg(
       func=envs_mdp.joint_vel_rel,
       params={
         "asset_cfg": SceneEntityCfg("robot", joint_names=(_LEG_JOINT_REGEX,)),
       },
-      noise=Unoise(n_min=-1.0, n_max=1.0),
+      noise=_bias_drift(step_noise=1.0, bias=math.radians(5.0)),
     ),
     "pendulum_joint_pos": ObservationTermCfg(
       func=envs_mdp.joint_pos_rel,
       params={
         "asset_cfg": SceneEntityCfg("robot", joint_names=_PENDULUM_JOINT_NAMES),
       },
-      noise=Unoise(n_min=-0.02, n_max=0.02),
+      noise=_bias_drift(
+        step_noise=0.04,
+        bias=math.radians(2.5),
+        drift_per_s=math.radians(0.03),
+      ),
     ),
     "pendulum_joint_vel": ObservationTermCfg(
       func=envs_mdp.joint_vel_rel,
       params={
         "asset_cfg": SceneEntityCfg("robot", joint_names=_PENDULUM_JOINT_NAMES),
       },
-      noise=Unoise(n_min=-1.0, n_max=1.0),
+      noise=_bias_drift(
+        step_noise=2.0,
+        bias=math.radians(3.0),
+        drift_per_s=math.radians(0.1),
+      ),
     ),
     "actions": ObservationTermCfg(func=envs_mdp.last_action),
     "clock_inputs": ObservationTermCfg(
@@ -172,12 +199,12 @@ def make_pendulum_env_cfg() -> ManagerBasedRlEnvCfg:
       },
     ),
     "reset_pendulum_joints": EventTermCfg(
-      func=envs_mdp.reset_joints_by_offset,
+      func=mdp.reset_pendulum_angles_magnitude,
       mode="reset",
       params={
-        # Symmetric uniform on [-a, +a] matches sign+magnitude sampling in
-        # distribution. Start at 0 (upright) for stage 1; curriculum may widen.
-        "position_range": (0.0, 0.0),
+        # Magnitude in [min_deg, max_deg] with random sign per env/joint;
+        # curriculum overwrites angle_range_deg per stage.
+        "angle_range_deg": (0.0, 5.0),
         "velocity_range": (0.0, 0.0),
         "asset_cfg": SceneEntityCfg("robot", joint_names=_PENDULUM_JOINT_NAMES),
       },
@@ -233,14 +260,6 @@ def make_pendulum_env_cfg() -> ManagerBasedRlEnvCfg:
         "operation": "scale",
         "kp_range": (0.8, 1.2),
         "kd_range": (0.8, 1.2),
-      },
-    ),
-    "encoder_bias": EventTermCfg(
-      mode="startup",
-      func=dr.encoder_bias,
-      params={
-        "asset_cfg": SceneEntityCfg("robot"),
-        "bias_range": (-math.radians(1.0), math.radians(1.0)),
       },
     ),
     "pendulum_damping": EventTermCfg(
@@ -333,6 +352,41 @@ def make_pendulum_env_cfg() -> ManagerBasedRlEnvCfg:
       },
     ),
     "termination_penalty": RewardTermCfg(func=envs_mdp.is_terminated, weight=-5.0),
+    # Gait shaping (phase-locked to clock_inputs observation).
+    "feet_clearance": RewardTermCfg(
+      func=mdp.feet_clearance,
+      weight=-20.0,
+      params={
+        # body_names set per-robot so body_ids align with the phase offsets below.
+        "asset_cfg": SceneEntityCfg("robot", body_names=(), preserve_order=True),
+        "period_s": 0.5,
+        "offsets": (0.0, 0.5, 0.5, 0.0),
+      },
+    ),
+    "feet_air_time": RewardTermCfg(
+      func=mdp.feet_air_time,
+      weight=0.1,
+      params={
+        "sensor_name": "feet_ground_contact",
+        "command_name": "position_goal",
+        "threshold_s": 0.5,
+        "command_distance_threshold": 0.1,
+      },
+    ),
+    "tracking_contacts_shaped_force": RewardTermCfg(
+      func=mdp.tracking_contacts_shaped_force,
+      weight=1.0,
+      params={
+        "sensor_name": "feet_ground_contact",
+        "period_s": 0.5,
+        "offsets": (0.0, 0.5, 0.5, 0.0),
+      },
+    ),
+    "undesired_contacts": RewardTermCfg(
+      func=mdp.undesired_contacts,
+      weight=-1.0,
+      params={"sensor_name": "thigh_contact", "threshold": 1.0},
+    ),
   }
 
   ##
@@ -417,6 +471,7 @@ def make_pendulum_env_cfg() -> ManagerBasedRlEnvCfg:
         "pendulum_termination_name": "pendulum_fallen",
         "position_termination_name": "position_goal_violation",
         "push_event_name": "push_robot",
+        "pendulum_reset_event_name": "reset_pendulum_joints",
       },
     ),
   }
