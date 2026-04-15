@@ -131,7 +131,6 @@ def make_pendulum_env_cfg() -> ManagerBasedRlEnvCfg:
       actuator_names=(".*",),  # Matches only the 12 leg position actuators.
       scale=1.0,  # Set per-robot via GO2_ACTION_SCALE dict.
       use_default_offset=True,
-      clip={_LEG_JOINT_REGEX: (-1.0, 1.0)},
     )
   }
 
@@ -294,11 +293,6 @@ def make_pendulum_env_cfg() -> ManagerBasedRlEnvCfg:
     "action_l2": RewardTermCfg(func=envs_mdp.action_l2, weight=-0.1),
     "action_rate_l2": RewardTermCfg(func=envs_mdp.action_rate_l2, weight=-0.01),
     "action_acc_l2": RewardTermCfg(func=envs_mdp.action_acc_l2, weight=-0.01),
-    "action_over_limit": RewardTermCfg(
-      func=mdp.action_over_limit_l2,
-      weight=-0.01,
-      params={"soft_limit": 2.0},
-    ),
     "torque_l2": RewardTermCfg(
       func=envs_mdp.joint_torques_l2,
       weight=-0.0001,
