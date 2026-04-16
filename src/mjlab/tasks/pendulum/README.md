@@ -8,26 +8,25 @@ Registered task: `Mjlab-Pendulum-Balance-Unitree-Go2`.
 ## Training
 
 ```sh
-uv run train Mjlab-Pendulum-Balance-Unitree-Go2
+python -m mjlab.scripts.train Mjlab-Pendulum-Balance-Unitree-Go2 \
+  --env.scene.num-envs 4096 \
+  --agent.max-iterations 75000 \
+  --agent.run-name "run_name" \
+  --video True
 ```
 
-Useful flags:
+Other useful flags:
 
 ```sh
-# Override env/run settings (tyro parses nested dataclasses).
-uv run train Mjlab-Pendulum-Balance-Unitree-Go2 \
-  --agent.run-name my_experiment \
-  --agent.max-iterations 75000
-
 # Multi-GPU.
-uv run train Mjlab-Pendulum-Balance-Unitree-Go2 --gpu-ids "[0, 1]"
+python -m mjlab.scripts.train Mjlab-Pendulum-Balance-Unitree-Go2 --gpu-ids "[0, 1]"
 
 # Resume from a W&B checkpoint.
-uv run train Mjlab-Pendulum-Balance-Unitree-Go2 \
+python -m mjlab.scripts.train Mjlab-Pendulum-Balance-Unitree-Go2 \
   --wandb-run-path <entity>/<project>/<run_id>
 
 # See all options.
-uv run train Mjlab-Pendulum-Balance-Unitree-Go2 --help
+python -m mjlab.scripts.train Mjlab-Pendulum-Balance-Unitree-Go2 --help
 ```
 
 Logs land in `logs/rsl_rl/go2_pendulum/<timestamp>[_<run_name>]/`.
@@ -35,21 +34,25 @@ Logs land in `logs/rsl_rl/go2_pendulum/<timestamp>[_<run_name>]/`.
 ## Playing
 
 ```sh
-# Latest local checkpoint under logs/rsl_rl/go2_pendulum/.
-uv run play Mjlab-Pendulum-Balance-Unitree-Go2 \
-  --checkpoint-file logs/rsl_rl/go2_pendulum/<run>/model_<N>.pt
+python -m mjlab.scripts.play Mjlab-Pendulum-Balance-Unitree-Go2 \
+  --checkpoint-file logs/rsl_rl/go2_pendulum/<run>/model_<N>.pt \
+  --num-envs 1 \
+  --video True
+```
 
+Other useful flags:
+
+```sh
 # Pull a checkpoint from W&B.
-uv run play Mjlab-Pendulum-Balance-Unitree-Go2 \
+python -m mjlab.scripts.play Mjlab-Pendulum-Balance-Unitree-Go2 \
   --wandb-run-path <entity>/<project>/<run_id>
 
 # Dummy policies (useful for inspecting the env).
-uv run play Mjlab-Pendulum-Balance-Unitree-Go2 --agent zero
-uv run play Mjlab-Pendulum-Balance-Unitree-Go2 --agent random
+python -m mjlab.scripts.play Mjlab-Pendulum-Balance-Unitree-Go2 --agent zero
+python -m mjlab.scripts.play Mjlab-Pendulum-Balance-Unitree-Go2 --agent random
 
-# Record a video instead of launching a viewer.
-uv run play Mjlab-Pendulum-Balance-Unitree-Go2 \
-  --checkpoint-file <...> --video --video-length 600
+# See all options.
+python -m mjlab.scripts.play Mjlab-Pendulum-Balance-Unitree-Go2 --help
 ```
 
 `play` loads the env with `play=True` (corruption disabled, pushes removed,
