@@ -37,7 +37,7 @@ class PendulumStage:
 # Stage boundaries mirror Isaac Lab's progress thresholds at 0/20/40/60/80%
 # of the total curriculum_total_steps. We use the same 2.4M-step default:
 # curriculum_total_steps = 75_000 * 32 = 2_400_000.
-CURRICULUM_TOTAL_STEPS_DEFAULT = 5 * 1000 * 32
+CURRICULUM_TOTAL_STEPS_DEFAULT = 5 * 15000 * 32
 
 
 def default_stages(
