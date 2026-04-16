@@ -18,6 +18,7 @@ class NoiseModel:
     self._noise_model_cfg = noise_model_cfg
     self._num_envs = num_envs
     self._device = device
+    self.noise_scale: float = 1.0
 
     # Validate configuration.
     if not hasattr(noise_model_cfg, "noise_cfg") or noise_model_cfg.noise_cfg is None:
@@ -27,9 +28,14 @@ class NoiseModel:
     """Reset noise model state. Override in subclasses if needed."""
 
   def __call__(self, data: torch.Tensor) -> torch.Tensor:
-    """Apply noise to input data."""
+    """Apply noise to input data, scaled by :attr:`noise_scale`."""
+    if self.noise_scale == 0.0:
+      return data
     assert self._noise_model_cfg.noise_cfg is not None
-    return self._noise_model_cfg.noise_cfg.apply(data)
+    noisy = self._noise_model_cfg.noise_cfg.apply(data)
+    if self.noise_scale != 1.0:
+      noisy = data + self.noise_scale * (noisy - data)
+    return noisy
 
 
 class NoiseModelWithAdditiveBias(NoiseModel):
@@ -80,8 +86,10 @@ class NoiseModelWithAdditiveBias(NoiseModel):
   def __call__(self, data: torch.Tensor) -> torch.Tensor:
     """Apply noise and additive bias to input data."""
     self._initialize_bias_shape(data.shape)
+    if self.noise_scale == 0.0:
+      return data
     noisy_data = super().__call__(data)
-    return noisy_data + self._bias
+    return noisy_data + self.noise_scale * self._bias
 
 
 class NoiseModelWithBiasDrift(NoiseModelWithAdditiveBias):
@@ -123,6 +131,7 @@ class NoiseModelWithBiasDrift(NoiseModelWithAdditiveBias):
         )
       drift_std = self._drift_std_per_s * (self._step_dt**0.5)
       self._bias = self._bias + drift_std * torch.randn_like(self._bias)
-    # Stepwise noise from base NoiseModel.__call__.
+    if self.noise_scale == 0.0:
+      return data
     noisy_data = NoiseModel.__call__(self, data)
-    return noisy_data + self._bias
+    return noisy_data + self.noise_scale * self._bias

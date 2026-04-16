@@ -50,7 +50,7 @@ def default_stages(
       start_step=0,
       dist_range=(0.0, 0.1),
       bearing_range=(0.0, 2.0 * math.pi),
-      yaw_range=(0.0, 0.0),
+      yaw_range=(math.radians(0.0), math.radians(0.0)),
       pendulum_angle_rad=math.radians(60.0),
       pendulum_duration_s=0.5,
       position_tolerance_m=5.0,
@@ -63,7 +63,7 @@ def default_stages(
       start_step=int(0.20 * total_steps),
       dist_range=(0.1, 0.2),
       bearing_range=(0.0, 2.0 * math.pi),
-      yaw_range=(-0.5, 0.5),
+      yaw_range=(math.radians(-15.0), math.radians(15.0)),
       pendulum_angle_rad=math.radians(60.0),
       pendulum_duration_s=0.5,
       position_tolerance_m=0.5,
@@ -76,7 +76,7 @@ def default_stages(
       start_step=int(0.40 * total_steps),
       dist_range=(0.1, 0.35),
       bearing_range=(0.0, 2.0 * math.pi),
-      yaw_range=(-math.pi / 2, math.pi / 2),
+      yaw_range=(math.radians(-30.0), math.radians(30.0)),
       pendulum_angle_rad=math.radians(45.0),
       pendulum_duration_s=0.5,
       position_tolerance_m=0.3,
@@ -89,7 +89,7 @@ def default_stages(
       start_step=int(0.60 * total_steps),
       dist_range=(0.2, 0.5),
       bearing_range=(0.0, 2.0 * math.pi),
-      yaw_range=(-math.pi / 2, math.pi / 2),
+      yaw_range=(math.radians(-60.0), math.radians(60.0)),
       pendulum_angle_rad=math.radians(30.0),
       pendulum_duration_s=0.5,
       position_tolerance_m=0.2,
@@ -102,7 +102,7 @@ def default_stages(
       start_step=int(0.80 * total_steps),
       dist_range=(0.3, 0.5),
       bearing_range=(-math.pi / 3, math.pi / 3),
-      yaw_range=(-math.pi, math.pi),
+      yaw_range=(math.radians(-90.0), math.radians(90.0)),
       pendulum_angle_rad=math.radians(15.0),
       pendulum_duration_s=0.5,
       position_tolerance_m=0.2,
@@ -133,6 +133,10 @@ def pendulum_difficulty(
   push_event_name: str | None = None,
   pendulum_reset_event_name: str | None = None,
   stages: list[PendulumStage] | None = None,
+  noise_curriculum_steps: int = CURRICULUM_TOTAL_STEPS_DEFAULT,
+  noise_start_scale: float = 0.0,
+  noise_end_scale: float = 1.0,
+  noise_group_name: str = "actor",
 ) -> dict[str, torch.Tensor]:
   """Advance the 5-stage curriculum based on ``env.common_step_counter``.
 
@@ -153,6 +157,10 @@ def pendulum_difficulty(
       ``reset_pendulum_angles_magnitude`` event whose ``angle_range_deg`` we
       re-tune per stage. If ``None``, the reset range isn't modulated.
     stages: Optional override for the stage list.
+    noise_curriculum_steps: Steps over which to ramp observation noise.
+    noise_start_scale: Noise scale at step 0.
+    noise_end_scale: Noise scale at ``noise_curriculum_steps``.
+    noise_group_name: Observation group whose noise models are scaled.
   """
   del env_ids
   if stages is None:
@@ -191,6 +199,13 @@ def pendulum_difficulty(
     reset_cfg = env.event_manager.get_term_cfg(pendulum_reset_event_name)
     reset_cfg.params["angle_range_deg"] = stage.pendulum_reset_deg_range
 
+  # Observation noise curriculum: linear ramp from start_scale to end_scale.
+  noise_progress = min(1.0, env.common_step_counter / max(noise_curriculum_steps, 1))
+  noise_scale = noise_start_scale + noise_progress * (
+    noise_end_scale - noise_start_scale
+  )
+  env.observation_manager.set_group_noise_scale(noise_group_name, noise_scale)
+
   step_tensor = torch.tensor(float(env.common_step_counter))
   return {
     "stage_start_step": torch.tensor(float(stage.start_step)),
@@ -199,6 +214,7 @@ def pendulum_difficulty(
     "position_tolerance_m": torch.tensor(stage.position_tolerance_m),
     "dist_max": torch.tensor(stage.dist_range[1]),
     "pendulum_reset_deg_max": torch.tensor(stage.pendulum_reset_deg_range[1]),
+    "noise_scale": torch.tensor(noise_scale),
   }
 
 

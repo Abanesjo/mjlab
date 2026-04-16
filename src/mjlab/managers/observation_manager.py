@@ -236,6 +236,12 @@ class ObservationManager(ManagerBase):
     index = self._group_obs_term_names[group_name].index(term_name)
     return self._group_obs_term_cfgs[group_name][index]
 
+  def set_group_noise_scale(self, group_name: str, scale: float) -> None:
+    """Set the noise scale for all noise-model terms in *group_name*."""
+    for term_name in self._group_obs_term_names.get(group_name, []):
+      if term_name in self._group_obs_class_instances:
+        self._group_obs_class_instances[term_name].noise_scale = scale
+
   def reset(self, env_ids: torch.Tensor | slice | None = None) -> dict[str, float]:
     # Invalidate cache since reset envs will have different observations.
     self._obs_buffer = None
