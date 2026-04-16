@@ -96,7 +96,7 @@ def test_go2_pendulum_env_steps_smoke() -> None:
       critic = obs_dict["critic"]
       assert isinstance(actor, torch.Tensor)
       assert isinstance(critic, torch.Tensor)
-      assert actor.shape == (2, 56)
+      assert actor.shape == (2, 112)
       assert critic.shape == (2, 56)
       assert not torch.isnan(actor).any()
 

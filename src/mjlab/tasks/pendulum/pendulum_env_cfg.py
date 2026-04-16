@@ -70,20 +70,20 @@ def make_pendulum_env_cfg() -> ManagerBasedRlEnvCfg:
     "base_lin_vel": ObservationTermCfg(
       func=envs_mdp.builtin_sensor,
       params={"sensor_name": "robot/imu_lin_vel"},
-      noise=_bias_drift(step_noise=0.1, bias=0.05, drift_per_s=0.01),
+      noise=_bias_drift(step_noise=0.2, bias=0.1, drift_per_s=0.02),
     ),
     "base_ang_vel": ObservationTermCfg(
       func=envs_mdp.builtin_sensor,
       params={"sensor_name": "robot/imu_ang_vel"},
       noise=_bias_drift(
-        step_noise=0.2,
-        bias=math.radians(3.0),
-        drift_per_s=math.radians(0.5),
+        step_noise=0.4,
+        bias=math.radians(6.0),
+        drift_per_s=math.radians(1.0),
       ),
     ),
     "projected_gravity": ObservationTermCfg(
       func=envs_mdp.projected_gravity,
-      noise=_bias_drift(step_noise=0.05, bias=0.03),
+      noise=_bias_drift(step_noise=0.1, bias=0.06),
     ),
     "state_error": ObservationTermCfg(
       func=envs_mdp.generated_commands,
@@ -94,14 +94,14 @@ def make_pendulum_env_cfg() -> ManagerBasedRlEnvCfg:
       params={
         "asset_cfg": SceneEntityCfg("robot", joint_names=(_LEG_JOINT_REGEX,)),
       },
-      noise=_bias_drift(step_noise=0.01, bias=math.radians(1.0)),
+      noise=_bias_drift(step_noise=0.02, bias=math.radians(2.0)),
     ),
     "leg_joint_vel": ObservationTermCfg(
       func=envs_mdp.joint_vel_rel,
       params={
         "asset_cfg": SceneEntityCfg("robot", joint_names=(_LEG_JOINT_REGEX,)),
       },
-      noise=_bias_drift(step_noise=1.0, bias=math.radians(5.0)),
+      noise=_bias_drift(step_noise=2.0, bias=math.radians(10.0)),
     ),
     "pendulum_joint_pos": ObservationTermCfg(
       func=envs_mdp.joint_pos_rel,
@@ -109,10 +109,11 @@ def make_pendulum_env_cfg() -> ManagerBasedRlEnvCfg:
         "asset_cfg": SceneEntityCfg("robot", joint_names=_PENDULUM_JOINT_NAMES),
       },
       noise=_bias_drift(
-        step_noise=0.02,
-        bias=math.radians(2.5),
-        drift_per_s=math.radians(0.03),
+        step_noise=0.04,
+        bias=math.radians(5.0),
+        drift_per_s=math.radians(0.06),
       ),
+      history_length=15,
     ),
     "pendulum_joint_vel": ObservationTermCfg(
       func=envs_mdp.joint_vel_rel,
@@ -120,10 +121,11 @@ def make_pendulum_env_cfg() -> ManagerBasedRlEnvCfg:
         "asset_cfg": SceneEntityCfg("robot", joint_names=_PENDULUM_JOINT_NAMES),
       },
       noise=_bias_drift(
-        step_noise=1.0,
-        bias=math.radians(3.0),
-        drift_per_s=math.radians(0.1),
+        step_noise=2.0,
+        bias=math.radians(6.0),
+        drift_per_s=math.radians(0.2),
       ),
+      history_length=15,
     ),
     "actions": ObservationTermCfg(func=envs_mdp.last_action),
     "clock_inputs": ObservationTermCfg(
@@ -132,9 +134,6 @@ def make_pendulum_env_cfg() -> ManagerBasedRlEnvCfg:
     ),
   }
 
-  # Critic sees the clean state (no corruption).
-  critic_terms = {**actor_terms}
-
   observations = {
     "actor": ObservationGroupCfg(
       terms=actor_terms,
@@ -142,9 +141,10 @@ def make_pendulum_env_cfg() -> ManagerBasedRlEnvCfg:
       enable_corruption=True,
     ),
     "critic": ObservationGroupCfg(
-      terms=critic_terms,
+      terms=actor_terms,
       concatenate_terms=True,
       enable_corruption=False,
+      history_length=0,
     ),
   }
 
