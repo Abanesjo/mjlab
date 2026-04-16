@@ -368,9 +368,7 @@ def make_pendulum_env_cfg() -> ManagerBasedRlEnvCfg:
       weight=0.1,
       params={
         "sensor_name": "feet_ground_contact",
-        "command_name": "position_goal",
-        "threshold_s": 0.5,
-        "command_distance_threshold": 0.1,
+        "threshold_s": 0.1,
       },
     ),
     "tracking_contacts_shaped_force": RewardTermCfg(

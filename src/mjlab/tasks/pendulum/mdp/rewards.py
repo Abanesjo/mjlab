@@ -158,27 +158,19 @@ def feet_clearance(
 def feet_air_time(
   env: ManagerBasedRlEnv,
   sensor_name: str,
-  command_name: str,
-  threshold_s: float = 0.5,
-  command_distance_threshold: float = 0.1,
+  threshold_s: float = 0.1,
 ) -> torch.Tensor:
-  """Per-landing air-time bonus, gated by the position-goal command.
+  """Per-landing air-time bonus.
 
   Adds ``(last_air_time_i - threshold_s)`` at each foot's landing frame
-  (``compute_first_contact`` mask) and sums across feet; zeroed out when the
-  body-frame position error is below ``command_distance_threshold``.
+  (``compute_first_contact`` mask) and sums across feet.
   """
   sensor: ContactSensor = env.scene[sensor_name]
   first_contact = sensor.compute_first_contact(env.step_dt)
   last_air = sensor.data.last_air_time
   assert last_air is not None
   per_foot = (last_air - threshold_s) * first_contact.float()
-  reward = torch.sum(per_foot, dim=-1)
-
-  cmd = env.command_manager.get_command(command_name)
-  assert cmd is not None
-  dist = torch.linalg.vector_norm(cmd[:, :2], dim=-1)
-  return reward * (dist > command_distance_threshold).float()
+  return torch.sum(per_foot, dim=-1)
 
 
 def tracking_contacts_shaped_force(
