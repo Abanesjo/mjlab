@@ -66,23 +66,47 @@ def make_pendulum_env_cfg() -> ManagerBasedRlEnvCfg:
   # Observations.
   ##
 
-  # Actor observation layout (112 dims, term-major; history flattened
-  # oldest-to-newest within each term):
-  #   [0:3]     base_lin_vel
-  #   [3:6]     base_ang_vel
-  #   [6:9]     projected_gravity
-  #   [9:12]    state_error
-  #   [12:24]   leg_joint_pos
-  #   [24:36]   leg_joint_vel
-  #   [36:66]   pendulum_joint_pos history  (2 joints x 15 frames)
-  #               layout: [p(t-14)_j1, p(t-14)_j2, ..., p(t0)_j1, p(t0)_j2]
-  #   [66:96]   pendulum_joint_vel history  (2 joints x 15 frames, same layout)
-  #   [96:108]  actions (last executed)
-  #   [108:112] clock_inputs
+  # Deployment contract for the exported policy (.onnx):
   #
-  # Critic observation layout (56 dims, single frame, clean state):
-  #   same term order as actor but no pendulum history (history_length=0
-  #   override on the critic group).
+  #   Input:  float32 tensor, shape (batch, 112). Pass RAW values in the units
+  #           listed below — do NOT normalize manually. obs_normalization=True
+  #           in rl_cfg.py bakes the running-stats layer into the ONNX graph.
+  #   Output: float32 tensor, shape (batch, 12). Pre-scale joint-position
+  #           residuals (see "Action application" below).
+  #
+  # Actor observation layout (112 dims, term-major; history is flattened
+  # oldest-to-newest with joints interleaved within each frame):
+  #
+  #   [0:3]     base_lin_vel       IMU body-frame linear velocity [m/s]
+  #   [3:6]     base_ang_vel       IMU body-frame angular velocity [rad/s]
+  #   [6:9]     projected_gravity  gravity in body frame, ~[0, 0, -1] upright
+  #   [9:12]    state_error        body-frame goal error [dx, dy, dyaw]
+  #                                (meters, meters, radians in [-pi, pi])
+  #   [12:24]   leg_joint_pos      q_i - q_i_default for 12 leg joints [rad]
+  #   [24:36]   leg_joint_vel      raw qd for 12 leg joints [rad/s]
+  #                                (default qd is zero, so subtraction is a no-op)
+  #   [36:66]   pendulum_joint_pos 15-frame history, 2 joints, layout
+  #                                [p(t-14)_j1, p(t-14)_j2, ..., p(t0)_j1, p(t0)_j2]
+  #   [66:96]   pendulum_joint_vel 15-frame history, same layout [rad/s]
+  #   [96:108]  actions            last network output, pre-scale (12 dims)
+  #   [108:112] clock_inputs       sin(2*pi*phase) per foot, diagonal-trot offsets
+  #
+  # Joint ordering (MJCF natural order, applies to leg_joint_pos, leg_joint_vel,
+  # and the 12-dim action output):
+  #   [FL_hip, FL_thigh, FL_calf, FR_hip, FR_thigh, FR_calf,
+  #    RL_hip, RL_thigh, RL_calf, RR_hip, RR_thigh, RR_calf]
+  # Pendulum joint order: [pendulum_joint1, pendulum_joint2].
+  #
+  # Action application (network output -> PD joint position target):
+  #   target[i] = default_joint_pos[i] + GO2_ACTION_SCALE[i] * action[i]
+  # GO2_ACTION_SCALE = 0.25 * effort_limit / stiffness = 0.235 for every leg
+  # joint (see asset_zoo/robots/unitree_go2/go2_constants.py). Targets are
+  # pushed to the 50 Hz PD loop (decimation=4 * sim timestep=0.005s).
+  #
+  # Critic observation layout (56 dims, single frame, clean state): same term
+  # order as actor but pendulum history is collapsed to a single frame
+  # (history_length=0 override on the critic group). Training-only; the
+  # exported policy is actor-only.
   actor_terms = {
     "base_lin_vel": ObservationTermCfg(
       func=envs_mdp.builtin_sensor,
