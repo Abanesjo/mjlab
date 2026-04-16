@@ -48,7 +48,7 @@ def default_stages(
     # Stage 1: stand + balance in place, generous pendulum tolerance.
     PendulumStage(
       start_step=0,
-      dist_range=(0.0, 0.1),
+      dist_range=(0.1, 0.2),
       bearing_range=(0.0, 2.0 * math.pi),
       yaw_range=(math.radians(0.0), math.radians(0.0)),
       pendulum_angle_rad=math.radians(60.0),
@@ -137,6 +137,8 @@ def pendulum_difficulty(
   noise_start_scale: float = 0.0,
   noise_end_scale: float = 1.0,
   noise_group_name: str = "actor",
+  noise_hold_zero_frac: float = 0.25,
+  noise_ramp_frac: float = 0.50,
 ) -> dict[str, torch.Tensor]:
   """Advance the 5-stage curriculum based on ``env.common_step_counter``.
 
@@ -161,6 +163,11 @@ def pendulum_difficulty(
     noise_start_scale: Noise scale at step 0.
     noise_end_scale: Noise scale at ``noise_curriculum_steps``.
     noise_group_name: Observation group whose noise models are scaled.
+    noise_hold_zero_frac: Fraction of the curriculum held at ``noise_start_scale``
+      before the smoothstep ramp begins. Defaults to 0.25.
+    noise_ramp_frac: Fraction of the curriculum spent inside the smoothstep
+      ramp. Defaults to 0.50. The remaining ``1 - hold_zero_frac - ramp_frac``
+      is spent at ``noise_end_scale``.
   """
   del env_ids
   if stages is None:
@@ -199,11 +206,19 @@ def pendulum_difficulty(
     reset_cfg = env.event_manager.get_term_cfg(pendulum_reset_event_name)
     reset_cfg.params["angle_range_deg"] = stage.pendulum_reset_deg_range
 
-  # Observation noise curriculum: linear ramp from start_scale to end_scale.
-  noise_progress = min(1.0, env.common_step_counter / max(noise_curriculum_steps, 1))
-  noise_scale = noise_start_scale + noise_progress * (
-    noise_end_scale - noise_start_scale
-  )
+  # Observation noise curriculum: smoothstep with hold-zero prefix and
+  # hold-one suffix. Smoothstep (3t^2 - 2t^3) has zero derivative at both
+  # endpoints, so noise changes are gradual entering and leaving the ramp.
+  raw_progress = env.common_step_counter / max(noise_curriculum_steps, 1)
+  ramp_end_frac = noise_hold_zero_frac + noise_ramp_frac
+  if raw_progress < noise_hold_zero_frac:
+    shaped = 0.0
+  elif raw_progress < ramp_end_frac and noise_ramp_frac > 0.0:
+    t = (raw_progress - noise_hold_zero_frac) / noise_ramp_frac
+    shaped = t * t * (3.0 - 2.0 * t)
+  else:
+    shaped = 1.0
+  noise_scale = noise_start_scale + shaped * (noise_end_scale - noise_start_scale)
   env.observation_manager.set_group_noise_scale(noise_group_name, noise_scale)
 
   step_tensor = torch.tensor(float(env.common_step_counter))

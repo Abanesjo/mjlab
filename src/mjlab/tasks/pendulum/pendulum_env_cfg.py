@@ -87,20 +87,20 @@ def make_pendulum_env_cfg() -> ManagerBasedRlEnvCfg:
     "base_lin_vel": ObservationTermCfg(
       func=envs_mdp.builtin_sensor,
       params={"sensor_name": "robot/imu_lin_vel"},
-      noise=_bias_drift(step_noise=0.2, bias=0.1, drift_per_s=0.02),
+      noise=_bias_drift(step_noise=0.1, bias=0.05, drift_per_s=0.02),
     ),
     "base_ang_vel": ObservationTermCfg(
       func=envs_mdp.builtin_sensor,
       params={"sensor_name": "robot/imu_ang_vel"},
       noise=_bias_drift(
-        step_noise=0.4,
-        bias=math.radians(6.0),
+        step_noise=0.1,
+        bias=math.radians(3.0),
         drift_per_s=math.radians(1.0),
       ),
     ),
     "projected_gravity": ObservationTermCfg(
       func=envs_mdp.projected_gravity,
-      noise=_bias_drift(step_noise=0.1, bias=0.06),
+      noise=_bias_drift(step_noise=0.05, bias=0.03),
     ),
     "state_error": ObservationTermCfg(
       func=envs_mdp.generated_commands,
@@ -111,14 +111,14 @@ def make_pendulum_env_cfg() -> ManagerBasedRlEnvCfg:
       params={
         "asset_cfg": SceneEntityCfg("robot", joint_names=(_LEG_JOINT_REGEX,)),
       },
-      noise=_bias_drift(step_noise=0.02, bias=math.radians(2.0)),
+      noise=_bias_drift(step_noise=0.01, bias=math.radians(1.0)),
     ),
     "leg_joint_vel": ObservationTermCfg(
       func=envs_mdp.joint_vel_rel,
       params={
         "asset_cfg": SceneEntityCfg("robot", joint_names=(_LEG_JOINT_REGEX,)),
       },
-      noise=_bias_drift(step_noise=2.0, bias=math.radians(10.0)),
+      noise=_bias_drift(step_noise=0.3, bias=math.radians(5.0)),
     ),
     "pendulum_joint_pos": ObservationTermCfg(
       func=envs_mdp.joint_pos_rel,
@@ -126,8 +126,8 @@ def make_pendulum_env_cfg() -> ManagerBasedRlEnvCfg:
         "asset_cfg": SceneEntityCfg("robot", joint_names=_PENDULUM_JOINT_NAMES),
       },
       noise=_bias_drift(
-        step_noise=0.04,
-        bias=math.radians(5.0),
+        step_noise=0.02,
+        bias=math.radians(2.5),
         drift_per_s=math.radians(0.06),
       ),
       history_length=15,
@@ -138,8 +138,8 @@ def make_pendulum_env_cfg() -> ManagerBasedRlEnvCfg:
         "asset_cfg": SceneEntityCfg("robot", joint_names=_PENDULUM_JOINT_NAMES),
       },
       noise=_bias_drift(
-        step_noise=2.0,
-        bias=math.radians(6.0),
+        step_noise=1.0,
+        bias=math.radians(3.0),
         drift_per_s=math.radians(0.2),
       ),
       history_length=15,
@@ -335,8 +335,8 @@ def make_pendulum_env_cfg() -> ManagerBasedRlEnvCfg:
       },
     ),
     # Action regularization.
-    "action_l2": RewardTermCfg(func=envs_mdp.action_l2, weight=-0.00625),
-    "action_rate_l2": RewardTermCfg(func=envs_mdp.action_rate_l2, weight=-0.000625),
+    "action_l2": RewardTermCfg(func=envs_mdp.action_l2, weight=-0.1),
+    "action_rate_l2": RewardTermCfg(func=envs_mdp.action_rate_l2, weight=-0.01),
     "action_acc_l2": RewardTermCfg(func=envs_mdp.action_acc_l2, weight=-0.000625),
     "torque_l2": RewardTermCfg(
       func=envs_mdp.joint_torques_l2,
