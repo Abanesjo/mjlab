@@ -24,6 +24,20 @@ if TYPE_CHECKING:
   from mjlab.envs.manager_based_rl_env import ManagerBasedRlEnv
 
 
+_DEFAULT_ASSET_CFG = SceneEntityCfg("robot")
+
+
+def orient_exp(
+  env: ManagerBasedRlEnv,
+  std: float,
+  asset_cfg: SceneEntityCfg = _DEFAULT_ASSET_CFG,
+) -> torch.Tensor:
+  """``exp(-error / std)`` where error is the projected-gravity xy magnitude."""
+  asset: Entity = env.scene[asset_cfg.name]
+  error = torch.sum(torch.square(asset.data.projected_gravity_b[:, :2]), dim=1)
+  return torch.exp(-error / std)
+
+
 def position_tracking(
   env: ManagerBasedRlEnv, command_name: str, std: float
 ) -> torch.Tensor:
@@ -79,8 +93,8 @@ def balanced_movement(
   asset: Entity = env.scene[asset_cfg.name]
   pend_pos = asset.data.joint_pos[:, asset_cfg.joint_ids]
   pend_err = torch.sum(torch.square(pend_pos), dim=1)
-  base_speed = torch.linalg.vector_norm(asset.data.root_link_lin_vel_b[:, :2], dim=-1)
-  return torch.exp(-pend_err) * base_speed
+  base_speed = torch.linalg.vector_norm(asset.data.root_link_lin_vel_w[:, :2], dim=-1)
+  return torch.exp(-pend_err * base_speed)
 
 
 class progress:

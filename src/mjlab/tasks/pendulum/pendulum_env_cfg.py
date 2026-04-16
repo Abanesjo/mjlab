@@ -300,7 +300,7 @@ def make_pendulum_env_cfg() -> ManagerBasedRlEnvCfg:
       weight=0.45,
       params={
         "asset_cfg": SceneEntityCfg("robot", joint_names=_PENDULUM_JOINT_NAMES),
-        "std": 0.15,
+        "std": 0.01,
       },
     ),
     "pendulum_velocity": RewardTermCfg(
@@ -329,7 +329,11 @@ def make_pendulum_env_cfg() -> ManagerBasedRlEnvCfg:
       },
     ),
     # Base posture.
-    "orient_l2": RewardTermCfg(func=envs_mdp.flat_orientation_l2, weight=-0.8),
+    "orient_exp": RewardTermCfg(
+      func=mdp.orient_exp,
+      weight=0.8,
+      params={"std": 0.05},
+    ),
     "base_height": RewardTermCfg(
       func=envs_mdp.base_height_l2,
       weight=0.2,
