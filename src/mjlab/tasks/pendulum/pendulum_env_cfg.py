@@ -128,7 +128,7 @@ def make_pendulum_env_cfg() -> ManagerBasedRlEnvCfg:
     "actions": ObservationTermCfg(func=envs_mdp.last_action),
     "clock_inputs": ObservationTermCfg(
       func=mdp.clock_inputs,
-      params={"period_s": 0.5, "offsets": (0.0, 0.5, 0.5, 0.0)},
+      params={"period_s": 1.0 / 3.0, "offsets": (0.0, 0.5, 0.5, 0.0)},
     ),
   }
 
@@ -359,7 +359,7 @@ def make_pendulum_env_cfg() -> ManagerBasedRlEnvCfg:
       params={
         # body_names set per-robot so body_ids align with the phase offsets below.
         "asset_cfg": SceneEntityCfg("robot", body_names=(), preserve_order=True),
-        "period_s": 0.5,
+        "period_s": 1.0 / 3.0,
         "offsets": (0.0, 0.5, 0.5, 0.0),
       },
     ),
@@ -378,7 +378,7 @@ def make_pendulum_env_cfg() -> ManagerBasedRlEnvCfg:
       weight=1.0,
       params={
         "sensor_name": "feet_ground_contact",
-        "period_s": 0.5,
+        "period_s": 1.0 / 3.0,
         "offsets": (0.0, 0.5, 0.5, 0.0),
       },
     ),
