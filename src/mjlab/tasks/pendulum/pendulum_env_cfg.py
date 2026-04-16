@@ -66,6 +66,23 @@ def make_pendulum_env_cfg() -> ManagerBasedRlEnvCfg:
   # Observations.
   ##
 
+  # Actor observation layout (112 dims, term-major; history flattened
+  # oldest-to-newest within each term):
+  #   [0:3]     base_lin_vel
+  #   [3:6]     base_ang_vel
+  #   [6:9]     projected_gravity
+  #   [9:12]    state_error
+  #   [12:24]   leg_joint_pos
+  #   [24:36]   leg_joint_vel
+  #   [36:66]   pendulum_joint_pos history  (2 joints x 15 frames)
+  #               layout: [p(t-14)_j1, p(t-14)_j2, ..., p(t0)_j1, p(t0)_j2]
+  #   [66:96]   pendulum_joint_vel history  (2 joints x 15 frames, same layout)
+  #   [96:108]  actions (last executed)
+  #   [108:112] clock_inputs
+  #
+  # Critic observation layout (56 dims, single frame, clean state):
+  #   same term order as actor but no pendulum history (history_length=0
+  #   override on the critic group).
   actor_terms = {
     "base_lin_vel": ObservationTermCfg(
       func=envs_mdp.builtin_sensor,
