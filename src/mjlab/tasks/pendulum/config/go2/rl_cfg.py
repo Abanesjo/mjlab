@@ -17,7 +17,7 @@ def unitree_go2_pendulum_ppo_runner_cfg() -> RslRlOnPolicyRunnerCfg:
   """
   return RslRlOnPolicyRunnerCfg(
     actor=RslRlModelCfg(
-      hidden_dims=(512, 256, 128),
+      hidden_dims=(256, 256, 64),
       activation="elu",
       obs_normalization=False,
       distribution_cfg={
@@ -27,7 +27,7 @@ def unitree_go2_pendulum_ppo_runner_cfg() -> RslRlOnPolicyRunnerCfg:
       },
     ),
     critic=RslRlModelCfg(
-      hidden_dims=(512, 256, 128),
+      hidden_dims=(256, 256, 64),
       activation="elu",
       obs_normalization=False,
     ),

@@ -89,14 +89,14 @@ def make_pendulum_env_cfg() -> ManagerBasedRlEnvCfg:
       params={
         "asset_cfg": SceneEntityCfg("robot", joint_names=_PENDULUM_JOINT_NAMES),
       },
-      noise=Unoise(n_min=-0.02, n_max=0.02),
+      noise=Unoise(n_min=-math.radians(0.06), n_max=math.radians(0.06)),
     ),
     "pendulum_joint_vel": ObservationTermCfg(
       func=envs_mdp.joint_vel_rel,
       params={
         "asset_cfg": SceneEntityCfg("robot", joint_names=_PENDULUM_JOINT_NAMES),
       },
-      noise=Unoise(n_min=-1.0, n_max=1.0),
+      noise=Unoise(n_min=-math.radians(3.0), n_max=math.radians(3.0)),
     ),
     "actions": ObservationTermCfg(func=envs_mdp.last_action),
     "clock_inputs": ObservationTermCfg(
