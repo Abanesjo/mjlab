@@ -83,6 +83,15 @@ def last_action(env: ManagerBasedRlEnv, action_name: str | None = None) -> torch
   return env.action_manager.get_term(action_name).raw_action
 
 
+def executed_action(
+  env: ManagerBasedRlEnv, action_name: str | None = None
+) -> torch.Tensor:
+  """Get the processed action actually applied, relative to nominal offset."""
+  if action_name is None:
+    return env.action_manager.applied_action
+  return env.action_manager.get_term(action_name).applied_action
+
+
 ##
 # Commands.
 ##

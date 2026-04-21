@@ -3,6 +3,7 @@
 import pytest
 
 from mjlab.asset_zoo.robots import GO2_ACTION_SCALE
+from mjlab.envs import mdp as envs_mdp
 from mjlab.envs.mdp.actions import JointPositionActionCfg
 from mjlab.tasks.pendulum.mdp import PositionGoalCommandCfg
 from mjlab.tasks.registry import list_tasks, load_env_cfg
@@ -72,6 +73,23 @@ def test_go2_pendulum_play_config_disables_corruption() -> None:
   assert cfg.observations["actor"].enable_corruption is False
   assert cfg.curriculum == {}
   assert "push_robot" not in cfg.events
+
+
+def test_go2_pendulum_uses_executed_action_observation() -> None:
+  cfg = load_env_cfg("Mjlab-Pendulum-Balance-Unitree-Go2")
+  assert cfg.observations["actor"].terms["actions"].func is envs_mdp.executed_action
+
+
+def test_go2_pendulum_uses_updated_reward_helpers() -> None:
+  cfg = load_env_cfg("Mjlab-Pendulum-Balance-Unitree-Go2")
+  assert cfg.rewards["action_l2"].func is envs_mdp.executed_action_l2
+  assert cfg.rewards["action_rate_l2"].func is envs_mdp.executed_action_rate_l2
+  assert cfg.rewards["action_acc_l2"].func is envs_mdp.executed_action_acc_l2
+  assert cfg.rewards["torque_l2"].func is envs_mdp.joint_actuator_effort_l2
+  assert cfg.rewards["orient_l2"].func is envs_mdp.flat_orientation_reward
+  assert cfg.rewards["orient_l2"].weight == 0.8
+  assert cfg.rewards["orient_l2"].params["std"] == 0.05
+  assert cfg.rewards["termination_penalty"].func is envs_mdp.early_termination
 
 
 @pytest.mark.slow

@@ -22,7 +22,14 @@ def _make_mock_action_term(action_dim: int):
     term = Mock()
     term.action_dim = action_dim
     term.raw_action = torch.zeros(env.num_envs, action_dim, device=env.device)
+    term.applied_action = torch.zeros(env.num_envs, action_dim, device=env.device)
+
+    def process_actions(actions):
+      term.raw_action = actions.clone()
+      term.applied_action = (2.0 * actions).clone()
+
     term.process_actions = Mock()
+    term.process_actions.side_effect = process_actions
     term.apply_actions = Mock()
     term.reset = Mock()
     return term
@@ -116,3 +123,34 @@ def test_action_history_reset(mock_env, action_term_cfg, device):
   assert torch.all(manager.action == 0.0)
   assert torch.all(manager.prev_action == 0.0)
   assert torch.all(manager.prev_prev_action == 0.0)
+
+
+def test_applied_action_history_tracking(mock_env, action_term_cfg, device):
+  """Processed action history should track the applied command signal."""
+  manager = ActionManager({"action": action_term_cfg}, mock_env)
+
+  action1 = torch.tensor([[1.0, 2.0, 3.0]] * mock_env.num_envs, device=device)
+  action2 = torch.tensor([[4.0, 5.0, 6.0]] * mock_env.num_envs, device=device)
+
+  manager.process_action(action1)
+  assert torch.allclose(manager.applied_action, 2.0 * action1)
+  assert torch.all(manager.prev_applied_action == 0.0)
+  assert torch.all(manager.prev_prev_applied_action == 0.0)
+
+  manager.process_action(action2)
+  assert torch.allclose(manager.applied_action, 2.0 * action2)
+  assert torch.allclose(manager.prev_applied_action, 2.0 * action1)
+  assert torch.all(manager.prev_prev_applied_action == 0.0)
+
+
+def test_applied_action_history_reset(mock_env, action_term_cfg, device):
+  """Reset should clear the processed action history buffers."""
+  manager = ActionManager({"action": action_term_cfg}, mock_env)
+  action = torch.tensor([[1.0, 2.0, 3.0]] * mock_env.num_envs, device=device)
+  manager.process_action(action)
+  manager.reset(env_ids=torch.tensor([0, 2]))
+
+  for env_id in [0, 2]:
+    assert torch.all(manager.applied_action[env_id] == 0.0)
+    assert torch.all(manager.prev_applied_action[env_id] == 0.0)
+    assert torch.all(manager.prev_prev_applied_action[env_id] == 0.0)

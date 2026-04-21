@@ -98,7 +98,7 @@ def make_pendulum_env_cfg() -> ManagerBasedRlEnvCfg:
       },
       noise=Unoise(n_min=-math.radians(3.0), n_max=math.radians(3.0)),
     ),
-    "actions": ObservationTermCfg(func=envs_mdp.last_action),
+    "actions": ObservationTermCfg(func=envs_mdp.executed_action),
     "clock_inputs": ObservationTermCfg(
       func=mdp.clock_inputs,
       params={"period_s": 0.5, "offsets": (0.0, 0.5, 0.5, 0.0)},
@@ -332,18 +332,26 @@ def make_pendulum_env_cfg() -> ManagerBasedRlEnvCfg:
       params={"sensor_name": "undesired_ground_contact"},
     ),
     # Action regularization.
-    "action_l2": RewardTermCfg(func=envs_mdp.action_l2, weight=-0.1),
-    "action_rate_l2": RewardTermCfg(func=envs_mdp.action_rate_l2, weight=-0.01),
-    "action_acc_l2": RewardTermCfg(func=envs_mdp.action_acc_l2, weight=-0.01),
+    "action_l2": RewardTermCfg(func=envs_mdp.executed_action_l2, weight=-0.1),
+    "action_rate_l2": RewardTermCfg(
+      func=envs_mdp.executed_action_rate_l2, weight=-0.01
+    ),
+    "action_acc_l2": RewardTermCfg(
+      func=envs_mdp.executed_action_acc_l2, weight=-0.01
+    ),
     "torque_l2": RewardTermCfg(
-      func=envs_mdp.joint_torques_l2,
+      func=envs_mdp.joint_actuator_effort_l2,
       weight=-0.0001,
       params={
         "asset_cfg": SceneEntityCfg("robot", joint_names=(_LEG_JOINT_REGEX,)),
       },
     ),
     # Base posture.
-    "orient_l2": RewardTermCfg(func=envs_mdp.flat_orientation_l2, weight=-0.8),
+    "orient_l2": RewardTermCfg(
+      func=envs_mdp.flat_orientation_reward,
+      weight=0.8,
+      params={"std": 0.05},
+    ),
     "base_height": RewardTermCfg(
       func=envs_mdp.base_height_l2,
       weight=0.2,
@@ -365,7 +373,9 @@ def make_pendulum_env_cfg() -> ManagerBasedRlEnvCfg:
         "asset_cfg": SceneEntityCfg("robot", joint_names=(_LEG_JOINT_REGEX,)),
       },
     ),
-    "termination_penalty": RewardTermCfg(func=envs_mdp.is_terminated, weight=-5.0),
+    "termination_penalty": RewardTermCfg(
+      func=envs_mdp.early_termination, weight=-5.0
+    ),
   }
 
   ##

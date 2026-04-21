@@ -171,6 +171,10 @@ class DifferentialIKAction(ActionTerm):
   def raw_action(self) -> torch.Tensor:
     return self._raw_actions
 
+  @property
+  def applied_action(self) -> torch.Tensor:
+    return self._raw_actions
+
   def process_actions(self, actions: torch.Tensor) -> None:
     self._raw_actions[:] = actions
 

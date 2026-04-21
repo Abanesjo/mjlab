@@ -9,7 +9,16 @@ from conftest import get_test_device
 
 from mjlab.actuator import BuiltinPositionActuatorCfg
 from mjlab.entity import Entity, EntityArticulationInfoCfg, EntityCfg
-from mjlab.envs.mdp.rewards import electrical_power_cost, joint_torques_l2
+from mjlab.envs.mdp.rewards import (
+  early_termination,
+  electrical_power_cost,
+  executed_action_acc_l2,
+  executed_action_l2,
+  executed_action_rate_l2,
+  flat_orientation_reward,
+  joint_actuator_effort_l2,
+  joint_torques_l2,
+)
 from mjlab.managers.reward_manager import RewardManager, RewardTermCfg
 from mjlab.managers.scene_entity_config import SceneEntityCfg
 from mjlab.sim.sim import Simulation, SimulationCfg
@@ -353,3 +362,73 @@ def test_joint_torques_l2_all_actuators(mock_env):
   # All actuators: 1^2 + 2^2 + 3^2 = 14.0
   expected = torch.full((4,), 14.0)
   assert torch.allclose(result, expected)
+
+
+def test_joint_actuator_effort_l2_with_joint_ids(mock_env):
+  """Test that joint-space actuator effort uses qfrc_actuator on selected joints."""
+  mock_env.scene["robot"].data.qfrc_actuator = torch.tensor(
+    [
+      [1.0, 99.0, 2.0],
+      [3.0, 99.0, 4.0],
+      [5.0, 99.0, 6.0],
+      [7.0, 99.0, 8.0],
+    ]
+  )
+
+  asset_cfg = SceneEntityCfg(name="robot", joint_ids=[0, 2])
+  result = joint_actuator_effort_l2(mock_env, asset_cfg)
+
+  expected = torch.tensor([5.0, 25.0, 61.0, 113.0])
+  assert torch.allclose(result, expected)
+
+
+def test_early_termination_excludes_timeouts(mock_env):
+  """Test that timeout episodes do not receive early-termination penalty."""
+  mock_env.termination_manager.terminated = torch.tensor([True, True, False, False])
+  mock_env.termination_manager.time_outs = torch.tensor([False, True, False, True])
+
+  result = early_termination(mock_env)
+
+  expected = torch.tensor([1.0, 0.0, 0.0, 0.0])
+  assert torch.allclose(result, expected)
+
+
+def test_flat_orientation_reward_is_bounded(mock_env):
+  """Test bounded orientation shaping for uprightness."""
+  mock_env.scene["robot"].data.projected_gravity_b = torch.tensor(
+    [
+      [0.0, 0.0, -1.0],
+      [0.1, 0.0, -0.99],
+      [0.5, 0.0, -0.87],
+      [1.0, 0.0, 0.0],
+    ]
+  )
+
+  result = flat_orientation_reward(mock_env, std=0.05)
+
+  assert result.shape == (4,)
+  assert torch.isclose(result[0], torch.tensor(1.0))
+  assert torch.all(result <= 1.0)
+  assert torch.all(result > 0.0)
+  assert result[0] > result[1] > result[2] > result[3]
+
+
+def test_executed_action_rewards_use_applied_action_history(mock_env):
+  """Test executed-action penalties use processed action history."""
+  mock_env.action_manager.applied_action = torch.tensor(
+    [[1.0, 2.0], [0.0, 0.0], [1.0, -1.0], [2.0, 1.0]]
+  )
+  mock_env.action_manager.prev_applied_action = torch.tensor(
+    [[0.5, 1.0], [0.0, 0.0], [0.0, -1.0], [1.0, 1.0]]
+  )
+  mock_env.action_manager.prev_prev_applied_action = torch.tensor(
+    [[0.0, 0.0], [0.0, 0.0], [-1.0, -1.0], [0.0, 1.0]]
+  )
+
+  l2 = executed_action_l2(mock_env)
+  rate = executed_action_rate_l2(mock_env)
+  acc = executed_action_acc_l2(mock_env)
+
+  torch.testing.assert_close(l2, torch.tensor([5.0, 0.0, 2.0, 5.0]))
+  torch.testing.assert_close(rate, torch.tensor([1.25, 0.0, 1.0, 1.0]))
+  torch.testing.assert_close(acc, torch.tensor([1.25, 0.0, 1.0, 2.0]))

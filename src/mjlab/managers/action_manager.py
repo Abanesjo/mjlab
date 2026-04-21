@@ -67,6 +67,11 @@ class ActionTerm(ManagerTermBase):
   def raw_action(self) -> torch.Tensor:
     raise NotImplementedError
 
+  @property
+  @abc.abstractmethod
+  def applied_action(self) -> torch.Tensor:
+    raise NotImplementedError
+
 
 class ActionManager(ManagerBase):
   """Manages action processing for the environment.
@@ -86,6 +91,9 @@ class ActionManager(ManagerBase):
     )
     self._prev_action = torch.zeros_like(self._action)
     self._prev_prev_action = torch.zeros_like(self._action)
+    self._applied_action = torch.zeros_like(self._action)
+    self._prev_applied_action = torch.zeros_like(self._action)
+    self._prev_prev_applied_action = torch.zeros_like(self._action)
 
   def __str__(self) -> str:
     msg = f"<ActionManager> contains {len(self._term_names)} active terms.\n"
@@ -132,6 +140,21 @@ class ActionManager(ManagerBase):
   def active_terms(self) -> list[str]:
     return self._term_names
 
+  @property
+  def applied_action(self) -> torch.Tensor:
+    """Executed action after per-term processing, relative to any fixed offset."""
+    return self._applied_action
+
+  @property
+  def prev_applied_action(self) -> torch.Tensor:
+    """Executed action from the previous policy step."""
+    return self._prev_applied_action
+
+  @property
+  def prev_prev_applied_action(self) -> torch.Tensor:
+    """Executed action from two policy steps ago."""
+    return self._prev_prev_applied_action
+
   # Methods.
 
   def get_term(self, name: str) -> ActionTerm:
@@ -144,6 +167,9 @@ class ActionManager(ManagerBase):
     self._prev_action[env_ids] = 0.0
     self._prev_prev_action[env_ids] = 0.0
     self._action[env_ids] = 0.0
+    self._prev_applied_action[env_ids] = 0.0
+    self._prev_prev_applied_action[env_ids] = 0.0
+    self._applied_action[env_ids] = 0.0
     # Reset action terms.
     for term in self._terms.values():
       term.reset(env_ids=env_ids)
@@ -167,11 +193,14 @@ class ActionManager(ManagerBase):
     self._prev_prev_action[:] = self._prev_action
     self._prev_action[:] = self._action
     self._action[:] = action.to(self.device)
+    self._prev_prev_applied_action[:] = self._prev_applied_action
+    self._prev_applied_action[:] = self._applied_action
     # Split the flat action vector and route each slice to its term.
     idx = 0
     for term in self._terms.values():
       term_actions = action[:, idx : idx + term.action_dim]
       term.process_actions(term_actions)
+      self._applied_action[:, idx : idx + term.action_dim] = term.applied_action
       idx += term.action_dim
 
   def apply_action(self) -> None:

@@ -114,6 +114,15 @@ class BaseAction(ActionTerm):
       self._lpf_alpha = dt / (dt + tau)
       self._lpf_state = torch.zeros_like(self._raw_actions)
 
+    if isinstance(self._offset, torch.Tensor):
+      self._processed_actions[:] = self._offset
+      if self._lpf_state is not None:
+        self._lpf_state[:] = self._offset
+    else:
+      self._processed_actions.fill_(self._offset)
+      if self._lpf_state is not None:
+        self._lpf_state.fill_(self._offset)
+
   def _find_targets(self, cfg: BaseActionCfg) -> tuple[list[int], list[str]]:
     """Find target IDs and names based on transmission type.
 
@@ -154,6 +163,11 @@ class BaseAction(ActionTerm):
     return self._raw_actions
 
   @property
+  def applied_action(self) -> torch.Tensor:
+    """Processed action contribution relative to any fixed offset."""
+    return self._processed_actions - self._offset
+
+  @property
   def action_dim(self) -> int:
     """Dimension of the action space."""
     return self._action_dim
@@ -189,8 +203,15 @@ class BaseAction(ActionTerm):
   def reset(self, env_ids: torch.Tensor | slice | None = None) -> None:
     """Reset raw actions to zero for specified environments."""
     self._raw_actions[env_ids] = 0.0
+    if isinstance(self._offset, torch.Tensor):
+      self._processed_actions[env_ids] = self._offset[env_ids]
+    else:
+      self._processed_actions[env_ids] = self._offset
     if self._lpf_state is not None:
-      self._lpf_state[env_ids] = 0.0
+      if isinstance(self._offset, torch.Tensor):
+        self._lpf_state[env_ids] = self._offset[env_ids]
+      else:
+        self._lpf_state[env_ids] = self._offset
 
 
 ##

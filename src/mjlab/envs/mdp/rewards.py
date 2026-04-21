@@ -25,8 +25,15 @@ def is_alive(env: ManagerBasedRlEnv) -> torch.Tensor:
 
 
 def is_terminated(env: ManagerBasedRlEnv) -> torch.Tensor:
-  """Penalize terminated episodes that don't correspond to episodic timeouts."""
+  """Penalize all terminated episodes, including timeouts."""
   return env.termination_manager.terminated.float()
+
+
+def early_termination(env: ManagerBasedRlEnv) -> torch.Tensor:
+  """Penalize non-timeout terminations only."""
+  return (
+    env.termination_manager.terminated & ~env.termination_manager.time_outs
+  ).float()
 
 
 def joint_torques_l2(
@@ -36,6 +43,16 @@ def joint_torques_l2(
   asset: Entity = env.scene[asset_cfg.name]
   return torch.sum(
     torch.square(asset.data.actuator_force[:, asset_cfg.actuator_ids]), dim=1
+  )
+
+
+def joint_actuator_effort_l2(
+  env: ManagerBasedRlEnv, asset_cfg: SceneEntityCfg = _DEFAULT_ASSET_CFG
+) -> torch.Tensor:
+  """Penalize joint-space actuator effort using MuJoCo's ``qfrc_actuator``."""
+  asset: Entity = env.scene[asset_cfg.name]
+  return torch.sum(
+    torch.square(asset.data.qfrc_actuator[:, asset_cfg.joint_ids]), dim=1
   )
 
 
@@ -82,6 +99,31 @@ def action_acc_l2(env: ManagerBasedRlEnv) -> torch.Tensor:
     env.action_manager.action
     - 2 * env.action_manager.prev_action
     + env.action_manager.prev_prev_action
+  )
+  return torch.sum(torch.square(action_acc), dim=1)
+
+
+def executed_action_l2(env: ManagerBasedRlEnv) -> torch.Tensor:
+  """Penalize processed executed action magnitude using L2 squared kernel."""
+  return torch.sum(torch.square(env.action_manager.applied_action), dim=1)
+
+
+def executed_action_rate_l2(env: ManagerBasedRlEnv) -> torch.Tensor:
+  """Penalize executed action rate using L2 squared kernel."""
+  return torch.sum(
+    torch.square(
+      env.action_manager.applied_action - env.action_manager.prev_applied_action
+    ),
+    dim=1,
+  )
+
+
+def executed_action_acc_l2(env: ManagerBasedRlEnv) -> torch.Tensor:
+  """Penalize executed action acceleration using L2 squared kernel."""
+  action_acc = (
+    env.action_manager.applied_action
+    - 2 * env.action_manager.prev_applied_action
+    + env.action_manager.prev_prev_applied_action
   )
   return torch.sum(torch.square(action_acc), dim=1)
 
@@ -165,6 +207,17 @@ def flat_orientation_l2(
   """Penalize non-flat base orientation."""
   asset: Entity = env.scene[asset_cfg.name]
   return torch.sum(torch.square(asset.data.projected_gravity_b[:, :2]), dim=1)
+
+
+def flat_orientation_reward(
+  env: ManagerBasedRlEnv,
+  std: float,
+  asset_cfg: SceneEntityCfg = _DEFAULT_ASSET_CFG,
+) -> torch.Tensor:
+  """Reward flat base orientation with a bounded exponential shaping term."""
+  asset: Entity = env.scene[asset_cfg.name]
+  orient_error = torch.sum(torch.square(asset.data.projected_gravity_b[:, :2]), dim=1)
+  return torch.exp(-orient_error / max(std, 1.0e-6))
 
 
 def lin_vel_z_l2(
