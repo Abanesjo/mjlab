@@ -298,6 +298,39 @@ def make_pendulum_env_cfg() -> ManagerBasedRlEnvCfg:
         "asset_cfg": SceneEntityCfg("robot", joint_names=_PENDULUM_JOINT_NAMES),
       },
     ),
+    # Gait shaping.
+    "feet_clearance": RewardTermCfg(
+      func=mdp.feet_clearance,
+      weight=-20.0,
+      params={
+        "asset_cfg": SceneEntityCfg("robot", body_names=()),  # Set per-robot.
+        "command_name": "position_goal",
+        "command_threshold": 0.1,
+      },
+    ),
+    "feet_air_time": RewardTermCfg(
+      func=mdp.feet_air_time,
+      weight=0.1,
+      params={
+        "sensor_name": "feet_ground_contact",
+        "command_name": "position_goal",
+        "command_threshold": 0.1,
+      },
+    ),
+    "tracking_contacts_shaped_force": RewardTermCfg(
+      func=mdp.tracking_contacts_shaped_force,
+      weight=1.0,
+      params={
+        "sensor_name": "feet_ground_contact",
+        "command_name": "position_goal",
+        "command_threshold": 0.1,
+      },
+    ),
+    "undesired_contacts": RewardTermCfg(
+      func=mdp.undesired_contacts,
+      weight=-1.0,
+      params={"sensor_name": "undesired_ground_contact"},
+    ),
     # Action regularization.
     "action_l2": RewardTermCfg(func=envs_mdp.action_l2, weight=-0.1),
     "action_rate_l2": RewardTermCfg(func=envs_mdp.action_rate_l2, weight=-0.01),

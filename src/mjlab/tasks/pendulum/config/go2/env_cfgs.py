@@ -11,6 +11,8 @@ from mjlab.tasks.pendulum.pendulum_env_cfg import make_pendulum_env_cfg
 
 _FEET = ("FR", "FL", "RR", "RL")
 _FOOT_GEOM_NAMES = tuple(f"{name}_foot_collision" for name in _FEET)
+_FOOT_BODY_NAMES = tuple(f"{name}_foot" for name in _FEET)
+_THIGH_BODY_NAMES = ("FR_thigh", "FL_thigh", "RR_thigh", "RL_thigh")
 
 
 def unitree_go2_pendulum_env_cfg(play: bool = False) -> ManagerBasedRlEnvCfg:
@@ -51,7 +53,20 @@ def unitree_go2_pendulum_env_cfg(play: bool = False) -> ManagerBasedRlEnvCfg:
     reduce="netforce",
     num_slots=1,
   )
-  cfg.scene.sensors = (feet_ground_cfg, base_contact_cfg, pendulum_contact_cfg)
+  undesired_contact_cfg = ContactSensorCfg(
+    name="undesired_ground_contact",
+    primary=ContactMatch(mode="body", pattern=_THIGH_BODY_NAMES, entity="robot"),
+    secondary=ContactMatch(mode="body", pattern="terrain"),
+    fields=("found", "force"),
+    reduce="netforce",
+    num_slots=1,
+  )
+  cfg.scene.sensors = (
+    feet_ground_cfg,
+    base_contact_cfg,
+    pendulum_contact_cfg,
+    undesired_contact_cfg,
+  )
 
   # Wire per-robot names into events + action + viewer.
   joint_pos_action = cfg.actions["joint_pos"]
@@ -63,6 +78,7 @@ def unitree_go2_pendulum_env_cfg(play: bool = False) -> ManagerBasedRlEnvCfg:
   cfg.events["base_mass"].params["asset_cfg"].body_names = ("base_link",)
   cfg.events["base_com"].params["asset_cfg"].body_names = ("base_link",)
   cfg.events["push_robot"].params["asset_cfg"].body_names = ("base_link",)
+  cfg.rewards["feet_clearance"].params["asset_cfg"].body_names = _FOOT_BODY_NAMES
 
   cfg.viewer.body_name = "base_link"
 
